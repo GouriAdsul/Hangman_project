@@ -68,3 +68,16 @@ Your score carries over across rounds until you choose to stop.
 ## 📄 License
 
 Free to use and modify for personal or educational purposes.
+
+Working Website Images:
+
+
+
+<img width="1353" height="725" alt="Screenshot 2026-10-01 180028" src="https://github.com/user-attachments/assets/6e6fb037-eadb-49bc-8646-f6ceacd7d0af" />
+
+
+
+<img width="1056" height="711" alt="Screenshot 2026-10-01 180239" src="https://github.com/user-attachments/assets/37582e30-1eb7-4eba-a44d-8ebb98aaf4cf" />
+
+
+
