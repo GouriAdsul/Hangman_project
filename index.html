@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hangman</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎮</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#eef3f1; --grid:#c9dcd6; --ink:#2b2f33; --pen:#c0392b; --ok:#2f7d5b; --key:#fbfdfc; --key-line:#9fb5ae;
+}
+@media (prefers-color-scheme:dark){
+  :root{--paper:#1d2427;--grid:#2c3a3e;--ink:#e6ece9;--pen:#ff7a68;--ok:#6fcf9f;--key:#263034;--key-line:#4a5d62}
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{
+  background-color:var(--paper);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:28px 28px;
+  color:var(--ink);
+  font-family:"Patrick Hand","Comic Sans MS","Segoe Print",cursive,sans-serif;
+  font-size:20px;
+  display:flex;justify-content:center;padding:20px 16px 40px;
+}
+main{width:100%;max-width:640px}
+header{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px}
+h1{font-size:2.4rem;margin:0;font-weight:400;letter-spacing:.02em}
+.score{font-size:1.4rem}
+.score b{font-weight:400;color:var(--ok)}
+.score b.neg{color:var(--pen)}
+.board{display:grid;grid-template-columns:170px 1fr;gap:18px;align-items:center;margin-top:8px}
+@media(max-width:480px){.board{grid-template-columns:1fr;justify-items:center;text-align:center}}
+svg{width:170px;height:auto;overflow:visible}
+svg .frame{stroke:var(--ink);stroke-width:4;stroke-linecap:round;fill:none}
+svg .part{stroke:var(--pen);stroke-width:4;stroke-linecap:round;fill:none;opacity:0;transition:opacity .25s}
+svg .part.on{opacity:1}
+.hint{margin:0 0 6px}
+.hint span{opacity:.7}
+.word{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 6px}
+@media(max-width:480px){.word{justify-content:center}}
+.slot{width:34px;height:46px;border-bottom:3px solid var(--ink);font-size:2rem;text-align:center;line-height:46px;text-transform:uppercase}
+.slot.reveal{color:var(--pen)}
+.left{margin:0}
+.keys{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:22px}
+.keys button{
+  width:44px;height:48px;font:inherit;font-size:1.3rem;text-transform:uppercase;cursor:pointer;
+  background:var(--key);color:var(--ink);border:2px solid var(--key-line);border-radius:6px;
+}
+.keys button:hover:not(:disabled){border-color:var(--ink)}
+.keys button:focus-visible,.again:focus-visible{outline:3px solid var(--ok);outline-offset:2px}
+.keys button:disabled{cursor:default}
+.keys button.hit{background:var(--ok);border-color:var(--ok);color:#fff}
+.keys button.miss{opacity:.4;text-decoration:line-through;text-decoration-color:var(--pen)}
+.msg{min-height:1.6em;text-align:center;margin:18px 0 0;font-size:1.3rem}
+.msg.win{color:var(--ok)} .msg.lose{color:var(--pen)}
+.again{
+  display:none;margin:12px auto 0;font:inherit;font-size:1.3rem;padding:8px 22px;cursor:pointer;
+  background:var(--ink);color:var(--paper);border:0;border-radius:6px;
+}
+.again.show{display:block}
+footer{margin-top:34px;text-align:center;font-size:.85rem;opacity:.7}
+@media(prefers-reduced-motion:reduce){svg .part{transition:none}}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Hangman</h1>
+    <div class="score">Score: <b id="score">0</b></div>
+  </header>
+
+  <section class="board" aria-label="Game board">
+    <svg viewBox="0 0 170 210" role="img" aria-label="Hangman drawing" id="drawing">
+      <path class="frame" d="M20 200 H120 M50 200 V15 H120 V38"/>
+      <circle class="part" cx="120" cy="58" r="20"/>
+      <path class="part" d="M120 78 V135"/>
+      <path class="part" d="M120 92 L96 118"/>
+      <path class="part" d="M120 92 L144 118"/>
+      <path class="part" d="M120 135 L98 172"/>
+      <path class="part" d="M120 135 L142 172"/>
+    </svg>
+    <div>
+      <p class="hint"><span>Hint:</span> <b id="hint"></b></p>
+      <div class="word" id="word" aria-live="polite"></div>
+      <p class="left">Attempts left: <b id="left">6</b></p>
+    </div>
+  </section>
+
+  <p class="msg" id="msg" role="status"></p>
+  <button class="again" id="again">Play again</button>
+  <div class="keys" id="keys" role="group" aria-label="Letters"></div>
+
+  <footer>Correct letter +10 · Wrong letter −2 · Score carries across rounds</footer>
+</main>
+
+<script>
+// Add more words here: "word": "hint"
+const words = {
+  apple: "A fruit",
+  tiger: "A wild animal",
+  computer: "An electronic machine",
+  school: "A place where students study",
+  flower: "A beautiful part of a plant"
+};
+const MAX_ATTEMPTS = 6;
+
+const $ = id => document.getElementById(id);
+const parts = document.querySelectorAll("#drawing .part");
+let score = 0, word, attempts, guessed, over, last = "";
+
+function pickWord() {
+  const list = Object.keys(words);
+  let w;
+  do { w = list[Math.floor(Math.random() * list.length)]; } while (w === last && list.length > 1);
+  return (last = w);
+}
+
+function buildKeys() {
+  const keys = $("keys");
+  keys.innerHTML = "";
+  for (const c of "abcdefghijklmnopqrstuvwxyz") {
+    const b = document.createElement("button");
+    b.textContent = c;
+    b.dataset.k = c;
+    b.setAttribute("aria-label", "Letter " + c);
+    b.addEventListener("click", () => guess(c));
+    keys.appendChild(b);
+  }
+}
+
+function render(reveal) {
+  $("word").innerHTML = [...word].map(c => {
+    const show = guessed.has(c) || reveal;
+    return `<span class="slot${reveal && !guessed.has(c) ? " reveal" : ""}">${show ? c : ""}</span>`;
+  }).join("");
+  $("left").textContent = attempts;
+  const s = $("score");
+  s.textContent = score;
+  s.classList.toggle("neg", score < 0);
+  parts.forEach((p, i) => p.classList.toggle("on", i < MAX_ATTEMPTS - attempts));
+}
+
+function newRound() {
+  word = pickWord();
+  attempts = MAX_ATTEMPTS;
+  guessed = new Set();
+  over = false;
+  $("hint").textContent = words[word];
+  $("msg").textContent = "";
+  $("msg").className = "msg";
+  $("again").classList.remove("show");
+  buildKeys();
+  render(false);
+}
+
+function guess(c) {
+  if (over || guessed.has(c)) return;
+  guessed.add(c);
+  const btn = document.querySelector(`[data-k="${c}"]`);
+  btn.disabled = true;
+  if (word.includes(c)) { score += 10; btn.classList.add("hit"); }
+  else { score -= 2; attempts--; btn.classList.add("miss"); }
+
+  const won = [...word].every(l => guessed.has(l));
+  if (won || attempts === 0) {
+    over = true;
+    document.querySelectorAll(".keys button").forEach(b => b.disabled = true);
+    $("msg").textContent = won ? `You won! Your score: ${score}` : `Game over. The word was "${word}". Your score: ${score}`;
+    $("msg").classList.add(won ? "win" : "lose");
+    $("again").classList.add("show");
+    $("again").focus();
+    render(!won);
+  } else {
+    render(false);
+  }
+}
+
+document.addEventListener("keydown", e => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (/^[a-z]$/i.test(e.key)) guess(e.key.toLowerCase());
+});
+$("again").addEventListener("click", newRound);
+
+newRound();
+</script>
+</body>
+</html>
